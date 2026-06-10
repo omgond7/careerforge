@@ -30,12 +30,12 @@ const containerVariants = {
     opacity: 1,
     transition: { staggerChildren: 0.08 },
   },
-};
+} as const;
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
-};
+} as const;
 
 export default function DashboardPage() {
   const { targetRole, careerTwin } = useCareerStore();

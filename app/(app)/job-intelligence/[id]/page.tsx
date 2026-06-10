@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, AlertCircle, TrendingUp, Target, Briefcase } from 'lucide-react';
 import { jobAnalysisDetail } from '@/lib/mock-data';
-import { MatchScoreCard, GapTable } from '@/components/cards';
-import { GapTable as GapTableComponent } from '@/components/table';
+import { MatchScoreCard } from '@/components/cards';
 
 export default function JobAnalysisDetail({ params }: { params: { id: string } }) {
   const job = jobAnalysisDetail;
