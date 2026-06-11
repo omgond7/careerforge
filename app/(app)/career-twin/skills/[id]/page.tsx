@@ -2,12 +2,73 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, TrendingUp, BookOpen, Briefcase, Users, Award } from 'lucide-react';
-import { skillDetailData } from '@/lib/mock-data';
+import { ArrowLeft, Briefcase, Users, Award, Loader2 } from 'lucide-react';
 import { MetricCard, MatchScoreCard } from '@/components/cards';
 
-export default function SkillDetail() {
-  const skill = skillDetailData;
+import { use } from 'react';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
+export default function SkillDetail({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  
+  const { data: userSkills, isLoading } = useSWR('/api/user/skills', fetcher);
+
+  const userSkill = userSkills?.find((us: any) => 
+    us.id === id || 
+    us.skillId === id || 
+    us.skill?.name?.toLowerCase() === id?.toLowerCase()
+  );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  const skill = userSkill ? {
+    name: userSkill.skill.name,
+    category: userSkill.skill.category || 'Backend',
+    proficiency: userSkill.level === 'BEGINNER' ? 'Beginner' : userSkill.level === 'INTERMEDIATE' ? 'Intermediate' : userSkill.level === 'ADVANCED' ? 'Advanced' : 'Expert',
+    endorsements: 12,
+    yearsOfExperience: userSkill.yearsUsed || 1.5,
+    projects: ['career-copilot', 'react-ecommerce'],
+    courses: [
+      { name: `Advanced ${userSkill.skill.name} Course`, platform: 'Frontend Masters', status: 'In Progress' },
+      { name: `${userSkill.skill.name} The Complete Guide`, platform: 'Udemy', status: 'Completed' },
+    ],
+    jobMatches: 24,
+    relevantJobs: [
+      { title: 'Senior Frontend Engineer', company: 'Stripe', match: 92 },
+      { title: 'Lead Full Stack Engineer', company: 'GitHub', match: 88 },
+    ],
+    relatedSkills: [
+      { name: 'REST APIs', proficiency: 'Advanced', relevance: 'high' },
+      { name: 'Apollo Client', proficiency: 'Advanced', relevance: 'high' },
+      { name: 'Node.js', proficiency: 'Intermediate', relevance: 'medium' },
+    ],
+  } : {
+    name: id ? id.charAt(0).toUpperCase() + id.slice(1) : 'Technology',
+    category: 'Development',
+    proficiency: 'Intermediate',
+    endorsements: 5,
+    yearsOfExperience: 2.0,
+    projects: ['Personal Portfolio'],
+    courses: [
+      { name: `Complete Guide to ${id}`, platform: 'Udemy', status: 'Completed' },
+    ],
+    jobMatches: 10,
+    relevantJobs: [
+      { title: 'Software Engineer', company: 'Tech Corp', match: 85 },
+    ],
+    relatedSkills: [
+      { name: 'Software Design', proficiency: 'Advanced', relevance: 'high' },
+    ],
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -103,7 +164,7 @@ export default function SkillDetail() {
 
         <div className="flex flex-col sm:flex-row gap-4">
           <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href={`/career-twin/roadmap?focus=${skill.name}`}>
+            <Link href={`/career-twin/roadmap`}>
               Build Learning Path
             </Link>
           </Button>

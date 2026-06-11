@@ -1,0 +1,28 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: careerforge_postgres_dev
+    environment:
+      POSTGRES_USER: careerforge
+      POSTGRES_PASSWORD: careerforge
+      POSTGRES_DB: careerforge_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: careerforge_redis_dev
+    ports:
+      - "6379:6379"
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_dev_data:

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Upload, CheckCircle2, ArrowRight, Loader } from 'lucide-react';
+import { Upload, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
 import { Github, Linkedin } from '@/components/icons';
 
 type Step = 'select' | 'connecting' | 'success';
@@ -12,10 +12,38 @@ export default function ImportWizard() {
   const [step, setStep] = useState<Step>('select');
   const [selectedSource, setSelectedSource] = useState<'github' | 'linkedin' | null>(null);
 
-  const handleConnect = (source: 'github' | 'linkedin') => {
+  const handleConnect = async (source: 'github' | 'linkedin') => {
     setSelectedSource(source);
     setStep('connecting');
-    setTimeout(() => setStep('success'), 2000);
+
+    try {
+      if (source === 'github') {
+        const res = await fetch('/api/integrations/github/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: 'mock-github-token', username: 'demo-user' }),
+        });
+        if (res.ok) {
+          setStep('success');
+        } else {
+          setStep('select');
+        }
+      } else {
+        const res = await fetch('/api/integrations/linkedin/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: 'mock-linkedin-token', linkedinProfileUrl: 'https://linkedin.com/in/demo-user' }),
+        });
+        if (res.ok) {
+          setStep('success');
+        } else {
+          setStep('select');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setStep('select');
+    }
   };
 
   return (
@@ -61,7 +89,7 @@ export default function ImportWizard() {
                 {/* GitHub */}
                 <button
                   onClick={() => handleConnect('github')}
-                  className="w-full p-6 border-2 border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group"
+                  className="w-full p-6 border-2 border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-4 mb-3">
                     <div className="w-12 h-12 bg-foreground/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
@@ -82,7 +110,7 @@ export default function ImportWizard() {
                 {/* LinkedIn */}
                 <button
                   onClick={() => handleConnect('linkedin')}
-                  className="w-full p-6 border-2 border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group"
+                  className="w-full p-6 border-2 border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group cursor-pointer"
                 >
                   <div className="flex items-center gap-4 mb-3">
                     <div className="w-12 h-12 bg-[#0A66C2]/10 rounded-lg flex items-center justify-center group-hover:bg-[#0A66C2]/20 transition-colors">
@@ -111,7 +139,7 @@ export default function ImportWizard() {
                 </div>
               </div>
 
-              <button className="w-full p-6 border-2 border-dashed border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all">
+              <button className="w-full p-6 border-2 border-dashed border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all cursor-pointer">
                 <div className="flex items-center justify-center gap-3 mb-2">
                   <Upload className="w-5 h-5 text-muted-foreground" />
                   <p className="font-medium text-foreground">Upload Resume</p>
@@ -124,7 +152,7 @@ export default function ImportWizard() {
           {step === 'connecting' && (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                <Loader className="w-8 h-8 text-primary animate-spin" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
               <h3 className="text-xl font-semibold text-foreground mb-2">Connecting to {selectedSource === 'github' ? 'GitHub' : 'LinkedIn'}...</h3>
               <p className="text-muted-foreground text-center">We're securely importing your data. This may take a moment.</p>
@@ -139,20 +167,18 @@ export default function ImportWizard() {
               <h3 className="text-2xl font-semibold text-foreground mb-2">Success!</h3>
               <p className="text-muted-foreground text-center mb-8">
                 {selectedSource === 'github'
-                  ? '12 projects imported • 245 total stars • 1,245 contributions found'
-                  : '850 connections found • 12 recommendations • 5 years of experience'}
+                  ? 'Projects successfully synced, languages parsed, and portfolio imported!'
+                  : 'Work experience loaded, skills synchronized, and connections indexed!'}
               </p>
               <div className="space-y-3 w-full">
                 <Button asChild className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Link href="/dashboard">
-                    Continue to Dashboard
+                  <Link href="/onboarding/assess-skills">
+                    Assess Your Skills
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="w-full border-border">
-                  <Link href="/onboarding/import-wizard">
-                    Connect Another Account
-                  </Link>
+                <Button onClick={() => setStep('select')} variant="outline" className="w-full border-border">
+                  Connect Another Account
                 </Button>
               </div>
             </div>

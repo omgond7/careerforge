@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  Shield,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -51,6 +52,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
+
+  const visibleNavItems = [...navItems];
+  if (user?.role === 'ADMIN') {
+    visibleNavItems.push({ label: 'Admin Panel', icon: Shield, href: '/admin/users' });
+  }
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -122,7 +128,7 @@ export function Sidebar() {
 
       {/* Main Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
           return (

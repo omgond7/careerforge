@@ -1,17 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, use } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useTrackerStore, ApplicationStatus } from '@/lib/stores/tracker';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog';
+import useSWR from 'swr';
 import { 
   ArrowLeft, 
   Calendar, 
-  MapPin, 
-  Briefcase, 
   Trash2, 
   Save, 
   Edit3,
@@ -20,17 +18,35 @@ import {
   FileText
 } from 'lucide-react';
 
-export default function ApplicationDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = params.id as string;
-  
-  const { applications, updateApplication, removeApplication } = useTrackerStore();
-  const application = applications.find(app => app.id === id);
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
 
-  const [notes, setNotes] = useState(application?.notes || '');
+type ApplicationStatus = 'applied' | 'screen' | 'interview' | 'offer' | 'rejected';
+
+export default function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+
+  const { data: application, isLoading, mutate } = useSWR(`/api/applications/${id}`, fetcher);
+
+  const [notes, setNotes] = useState('');
+  const [isNotesInitialized, setIsNotesInitialized] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  // Initialize notes once when application data is fetched
+  if (application && !isNotesInitialized) {
+    setNotes(application.notes || '');
+    setIsNotesInitialized(true);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">
+        Loading application details...
+      </div>
+    );
+  }
 
   if (!application) {
     return (
@@ -52,18 +68,51 @@ export default function ApplicationDetailPage() {
     rejected: { label: 'Rejected', color: 'bg-red-900/40 text-red-300 border-red-800' },
   };
 
-  const handleStatusChange = (newStatus: ApplicationStatus) => {
-    updateApplication(id, { status: newStatus });
+  const dbStatus = application.status?.toLowerCase() === 'screening' ? 'screen' : application.status?.toLowerCase();
+  const currentStatus = (dbStatus as ApplicationStatus) || 'applied';
+
+  const handleStatusChange = async (newStatus: ApplicationStatus) => {
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        mutate();
+      }
+    } catch (err) {
+      console.error('Failed to change status:', err);
+    }
   };
 
-  const handleSaveNotes = () => {
-    updateApplication(id, { notes });
-    setIsEditingNotes(false);
+  const handleSaveNotes = async () => {
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+      if (res.ok) {
+        mutate();
+        setIsEditingNotes(false);
+      }
+    } catch (err) {
+      console.error('Failed to save notes:', err);
+    }
   };
 
-  const handleDelete = () => {
-    removeApplication(id);
-    router.push('/application-tracker');
+  const handleDelete = async () => {
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        router.push('/application-tracker');
+      }
+    } catch (err) {
+      console.error('Failed to delete application:', err);
+    }
   };
 
   return (
@@ -92,7 +141,7 @@ export default function ApplicationDetailPage() {
             <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-primary" />
-                Applied on {application.appliedDate}
+                Applied on {new Date(application.appliedDate).toLocaleDateString()}
               </div>
               {application.matchScore && (
                 <div className="flex items-center gap-1.5 font-medium text-foreground">
@@ -105,8 +154,8 @@ export default function ApplicationDetailPage() {
 
           <div className="flex flex-col gap-2">
             <span className="text-xs text-muted-foreground font-medium mb-1 block">Current Stage</span>
-            <Badge className={`${statusConfig[application.status].color} px-3 py-1 border text-sm`}>
-              {statusConfig[application.status].label}
+            <Badge className={`${statusConfig[currentStatus]?.color} px-3 py-1 border text-sm`}>
+              {statusConfig[currentStatus]?.label}
             </Badge>
           </div>
         </div>
@@ -120,12 +169,12 @@ export default function ApplicationDetailPage() {
                 key={stage}
                 onClick={() => handleStatusChange(stage)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  application.status === stage
+                  currentStatus === stage
                     ? 'bg-primary border-primary text-primary-foreground shadow'
                     : 'bg-muted/30 border-border text-muted-foreground hover:bg-muted/80 hover:text-foreground'
                 }`}
               >
-                {statusConfig[stage].label}
+                {statusConfig[stage]?.label}
               </button>
             ))}
           </div>
@@ -189,18 +238,18 @@ export default function ApplicationDetailPage() {
               <div className="relative">
                 <div className="absolute -left-[23px] top-1 w-3.5 h-3.5 rounded-full bg-primary border-4 border-background" />
                 <h4 className="font-semibold text-foreground text-sm">Resume Sent</h4>
-                <p className="text-xs text-muted-foreground">Sent on {application.appliedDate}</p>
+                <p className="text-xs text-muted-foreground">Sent on {new Date(application.appliedDate).toLocaleDateString()}</p>
               </div>
               <div className="relative">
                 <div className={`absolute -left-[23px] top-1 w-3.5 h-3.5 rounded-full border-4 border-background ${
-                  ['screen', 'interview', 'offer'].includes(application.status) ? 'bg-primary' : 'bg-muted-foreground'
+                  ['screen', 'interview', 'offer'].includes(currentStatus) ? 'bg-primary' : 'bg-muted-foreground'
                 }`} />
                 <h4 className="font-semibold text-foreground text-sm">Initial Call</h4>
                 <p className="text-xs text-muted-foreground">Screening evaluation</p>
               </div>
               <div className="relative">
                 <div className={`absolute -left-[23px] top-1 w-3.5 h-3.5 rounded-full border-4 border-background ${
-                  ['interview', 'offer'].includes(application.status) ? 'bg-primary' : 'bg-muted-foreground'
+                  ['interview', 'offer'].includes(currentStatus) ? 'bg-primary' : 'bg-muted-foreground'
                 }`} />
                 <h4 className="font-semibold text-foreground text-sm">Technical Loop</h4>
                 <p className="text-xs text-muted-foreground">Live coding & system design</p>

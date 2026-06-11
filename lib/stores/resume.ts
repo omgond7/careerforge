@@ -31,10 +31,16 @@ export interface ResumeSection {
 }
 
 interface ResumeState {
-  resume: ResumeSection;
+  resumes: any[];
+  activeResume: any | null;
+  resume: ResumeSection; // Keep for backward-compatibility with components expecting this structure
   atsScore: number;
   missingKeywords: string[];
-  updateResume: (resume: Partial<ResumeSection>) => void;
+  isLoading: boolean;
+  fetchResumes: () => Promise<void>;
+  uploadResume: (file: File) => Promise<any>;
+  getAtsScore: (resumeId: string, jobDescription?: string) => Promise<void>;
+  updateResume: (updates: Partial<ResumeSection>) => void;
   setAtsScore: (score: number) => void;
   setMissingKeywords: (keywords: string[]) => void;
 }
@@ -74,18 +80,72 @@ const defaultResume: ResumeSection = {
   ],
 };
 
-export const useResumeStore = create<ResumeState>((set) => ({
+export const useResumeStore = create<ResumeState>((set, get) => ({
+  resumes: [],
+  activeResume: null,
   resume: defaultResume,
   atsScore: 78,
   missingKeywords: ['React Native', 'CI/CD Pipelines', 'Agile Leadership'],
-  
-  updateResume: (updates: Partial<ResumeSection>) =>
-    set((state) => ({
-      resume: { ...state.resume, ...updates },
-    })),
-  
-  setAtsScore: (score: number) => set({ atsScore: score }),
-  
-  setMissingKeywords: (keywords: string[]) =>
-    set({ missingKeywords: keywords }),
+  isLoading: false,
+
+  fetchResumes: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await fetch('/api/resume');
+      if (res.ok) {
+        const { data } = await res.json();
+        const active = data.find((r: any) => r.isPrimary) ?? data[0];
+        set({ 
+          resumes: data, 
+          activeResume: active, 
+          resume: active ? (active.contentJson as ResumeSection) : defaultResume,
+          atsScore: active?.atsScore ?? 78,
+          isLoading: false 
+        });
+      } else {
+        set({ isLoading: false });
+      }
+    } catch {
+      set({ isLoading: false });
+    }
+  },
+
+  uploadResume: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/resume/upload', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error('Upload failed');
+    const { data } = await res.json();
+    set((state) => ({ 
+      resumes: [data, ...state.resumes], 
+      activeResume: data,
+      resume: data.contentJson as ResumeSection
+    }));
+    return data;
+  },
+
+  getAtsScore: async (resumeId: string, jobDescription?: string) => {
+    try {
+      const res = await fetch(`/api/resume/${resumeId}/ats-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobDescription }),
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        set({ atsScore: data.score, missingKeywords: data.missingKeywords });
+      }
+    } catch {}
+  },
+
+  updateResume: (updates) => set((state) => ({ 
+    resume: { ...state.resume, ...updates },
+    activeResume: state.activeResume ? { 
+      ...state.activeResume, 
+      contentJson: { ...(state.activeResume.contentJson as ResumeSection), ...updates } 
+    } : null
+  })),
+
+  setAtsScore: (score) => set({ atsScore: score }),
+  setMissingKeywords: (keywords) => set({ missingKeywords: keywords }),
 }));

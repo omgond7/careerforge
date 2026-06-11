@@ -1,14 +1,56 @@
 'use client';
 
-import { useResumeStore } from '@/lib/stores/resume';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { FileText, Download, Eye, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { ATSScoreCard } from '@/components/cards';
 import { ResumePreview } from '@/components/resume/resume-preview';
 
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
+const defaultResume = {
+  personalInfo: {
+    fullName: 'Sarah Chen',
+    email: 'sarah.chen@example.com',
+    phone: '+1 (555) 123-4567',
+    location: 'San Francisco, CA',
+    linkedinUrl: 'linkedin.com/in/sarahchen',
+  },
+  summary: 'Experienced Frontend Engineer specializing in React and modern web architecture. Proven track record of delivering scalable enterprise applications and improving performance metrics.',
+  experience: [
+    {
+      id: '1',
+      company: 'TechNova Solutions',
+      role: 'Frontend Developer',
+      startDate: '2020',
+      endDate: 'Present',
+      description: 'Spearheaded the migration from Vue 2 to React, reducing technical debt.',
+      accomplishments: [
+        'Reduced application load time by 30%',
+        'Implemented automated testing reducing production bugs by 15%',
+      ],
+    },
+  ],
+  skills: [
+    {
+      category: 'Frontend',
+      items: ['React', 'TypeScript', 'Tailwind CSS', 'Next.js'],
+    },
+    {
+      category: 'Backend',
+      items: ['Node.js', 'GraphQL', 'PostgreSQL'],
+    },
+  ],
+};
+
 export default function ResumeStudioPage() {
-  const { resume, atsScore, missingKeywords } = useResumeStore();
+  const { data: resumes, isLoading } = useSWR('/api/resume', fetcher);
+
+  const activeResume = resumes?.find((r: any) => r.isPrimary) ?? resumes?.[0];
+  const resume = activeResume ? (activeResume.contentJson as any) : defaultResume;
+  const atsScore = activeResume?.atsScore ?? 78;
+  const missingKeywords: string[] = activeResume?.missingKeywords || ['React Native', 'CI/CD Pipelines', 'Agile Leadership'];
 
   return (
     <div className="p-8 space-y-8">

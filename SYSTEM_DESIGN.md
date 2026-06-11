@@ -24,7 +24,7 @@ The platform uses a polyglot storage approach to handle transactional, relationa
 ### A. Transactional Storage: PostgreSQL
 Responsible for handling user accounts, session metadata, integration configurations, parsed resume logs, job tracking status, and templates.
 
-*(For detailed table structures, refer to the [PRD.md](file:///Users/omgond/Desktop/ResBuild/PRD.md) and [database_design.md](file:///Users/omgond/.gemini/antigravity-ide/brain/4d828c96-3e14-4eb2-8079-96a9fbff2354/database_design.md) files).*
+*(For detailed table structures, refer to the [PRD.md](PRD.md) and [schema.prisma](prisma/schema.prisma) files).*
 
 ### B. Graph Storage: Neo4j (Career Digital Twin)
 Maps the deep relational web of a candidate's career. It facilitates traversals like finding what skills are missing by checking overlapping pathways from project requirements to certifications.

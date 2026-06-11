@@ -1,14 +1,46 @@
 'use client';
 
 import Link from 'next/link';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Users, Award, TrendingUp } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Users, Award, TrendingUp, Loader2 } from 'lucide-react';
 import { Linkedin } from '@/components/icons';
-import { syncResultsData } from '@/lib/mock-data';
 import { MetricCard } from '@/components/cards';
 
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
 export default function LinkedInSyncResults() {
-  const linkedin = syncResultsData.linkedin;
+  const { data: linkedinSync, error, isLoading } = useSWR('/api/integrations/linkedin/status', fetcher);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !linkedinSync || !linkedinSync.connected) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4 text-center">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground mb-2">LinkedIn integration not sync'd</h2>
+          <p className="text-muted-foreground mb-4">Please connect and sync your LinkedIn account first.</p>
+          <Button asChild>
+            <Link href="/settings/integrations">Manage Integrations</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const connectionsCount = linkedinSync.connectionsCount ?? 0;
+  const endorsements = linkedinSync.endorsements ?? 0;
+  const recommendations = linkedinSync.recommendations ?? 0;
+  const lastSyncedAt = linkedinSync.lastSyncedAt ? new Date(linkedinSync.lastSyncedAt) : new Date();
+
+  const experiences = linkedinSync.experiences || [];
+  const skills = linkedinSync.skills || [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -27,26 +59,26 @@ export default function LinkedInSyncResults() {
             <CheckCircle2 className="w-8 h-8 text-[#0A66C2]" />
           </div>
           <h1 className="text-3xl font-bold text-foreground mb-2">LinkedIn Sync Successful</h1>
-          <p className="text-muted-foreground">Your LinkedIn profile has been connected and data imported.</p>
+          <p className="text-muted-foreground">Your LinkedIn profile data and professional experience have been connected.</p>
         </div>
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <MetricCard
             title="Connections"
-            value={linkedin.connectionsCount}
+            value={connectionsCount}
             subtitle="Professional network"
             icon={<Users className="h-5 w-5 text-primary" />}
           />
           <MetricCard
             title="Endorsements"
-            value={linkedin.endorsements}
+            value={endorsements}
             subtitle="Skill endorsements"
             icon={<Award className="h-5 w-5 text-primary" />}
           />
           <MetricCard
             title="Recommendations"
-            value={linkedin.recommendations}
+            value={recommendations}
             subtitle="Professional references"
             icon={<TrendingUp className="h-5 w-5 text-primary" />}
           />
@@ -54,103 +86,91 @@ export default function LinkedInSyncResults() {
             <div className="text-center">
               <Linkedin className="w-6 h-6 text-[#0A66C2] mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground">Profile</p>
-              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="text-xs text-muted-foreground">Active Connection</p>
             </div>
           </div>
         </div>
 
         {/* Work Experience */}
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-semibold text-foreground mb-6">Work Experience</h2>
-          <div className="space-y-4">
-            {linkedin.experiences.map((exp, idx) => (
-              <div key={idx} className="p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="font-medium text-foreground">{exp.title}</h3>
-                    <p className="text-sm text-muted-foreground">{exp.company}</p>
+          <h2 className="text-xl font-semibold text-foreground mb-6 font-bold">Work Experience</h2>
+          {experiences.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No experiences imported.</p>
+          ) : (
+            <div className="space-y-4">
+              {experiences.map((exp: any, idx: number) => (
+                <div key={idx} className="p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-foreground text-sm">{exp.title}</h3>
+                      <p className="text-sm text-muted-foreground">{exp.company}</p>
+                    </div>
+                    {exp.current && (
+                      <span className="px-2.5 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+                        Current
+                      </span>
+                    )}
                   </div>
-                  {exp.current && (
-                    <span className="px-2.5 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
-                      Current
-                    </span>
-                  )}
+                  <p className="text-xs text-muted-foreground">{exp.duration}</p>
                 </div>
-                <p className="text-xs text-muted-foreground">{exp.duration}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Skills */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-6">Top Skills</h2>
-            <div className="space-y-4">
-              {linkedin.skills.map((skill) => (
-                <div key={skill.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{skill.name}</p>
-                    <p className="text-xs text-muted-foreground">{skill.count} endorsements</p>
+            <h2 className="text-xl font-semibold text-foreground mb-6 font-bold">Top Skills</h2>
+            {skills.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No skills imported.</p>
+            ) : (
+              <div className="space-y-4">
+                {skills.map((skillItem: any) => (
+                  <div key={skillItem.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{skillItem.name}</p>
+                      <p className="text-xs text-muted-foreground">{skillItem.count} endorsements</p>
+                    </div>
+                    {skillItem.endorsed && (
+                      <CheckCircle2 className="w-5 h-5 text-primary" />
+                    )}
                   </div>
-                  {skill.endorsed && (
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Recent Activity */}
+          {/* Sync Details */}
           <div className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-6">Recent Activity</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6 font-bold">Sync Details</h2>
             <div className="space-y-4">
-              {linkedin.recentActivity.map((activity, idx) => (
-                <div key={idx} className="p-3 bg-muted/30 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-foreground capitalize">
-                      {activity.type === 'post' ? '📝 Post' : '📰 Article'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(activity.date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{activity.engagement} engagements</p>
-                </div>
-              ))}
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">Synced At</span>
+                <span className="text-sm font-medium text-foreground">
+                  {lastSyncedAt.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">Status</span>
+                <span className="text-sm font-medium text-primary inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Success
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-muted-foreground">Auto-sync</span>
+                <span className="text-sm font-medium text-foreground">Enabled</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Sync Details */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Sync Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="py-2">
-              <p className="text-sm text-muted-foreground mb-1">Synced At</p>
-              <p className="text-sm font-medium text-foreground">
-                {new Date(linkedin.timestamp).toLocaleString()}
-              </p>
-            </div>
-            <div className="py-2">
-              <p className="text-sm text-muted-foreground mb-1">Status</p>
-              <p className="text-sm font-medium text-primary inline-flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" />
-                Success
-              </p>
-            </div>
-            <div className="py-2">
-              <p className="text-sm text-muted-foreground mb-1">Auto-sync</p>
-              <p className="text-sm font-medium text-foreground">Enabled</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Next Steps */}
+        {/* Ready to Continue */}
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Ready to Continue?</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Your LinkedIn profile is now synced. Use your imported experience and skills to get personalized job recommendations.
+          <h2 className="text-lg font-semibold text-foreground mb-4 font-bold font-semibold">Ready to Continue?</h2>
+          <p className="text-sm text-muted-foreground">
+            Your LinkedIn profile is successfully connected. You can use your imported skills and career background to scan jobs and evaluate resume match indicators.
           </p>
         </div>
 

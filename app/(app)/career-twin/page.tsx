@@ -1,6 +1,6 @@
 'use client';
 
-import { useCareerStore } from '@/lib/stores/career';
+import { useAuthStore } from '@/lib/stores/auth';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,12 +14,43 @@ import {
 import { SkillRadar, KnowledgeGraph } from '@/components/charts';
 import { RoadmapCard, InsightCard } from '@/components/cards';
 import { SkillBadge } from '@/components/badges';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
 
 export default function CareerTwinPage() {
-  const { careerTwin, targetRole } = useCareerStore();
+  const { user } = useAuthStore();
+  const { data: profile, isLoading } = useSWR('/api/user/profile', fetcher);
+
+  const careerTwin = profile ? {
+    id: profile.id,
+    name: user?.name || 'Candidate',
+    title: profile.headline || profile.targetRole || 'Professional Title',
+    company: profile.experience?.[0]?.company || profile.targetCompany || 'Self-Employed',
+    profileCompleteness: profile.profileCompleteness || 0,
+    topSkills: profile.skills?.slice(0, 5).map((s: any) => s.skill?.name || s.skillId) || [],
+    experience: profile.experienceYears || 0,
+  } : null;
+
+  const targetRole = profile?.targetRole ? {
+    title: profile.targetRole,
+    company: profile.targetCompany || 'Dream Company',
+    currentMatch: 75,
+    targetMatch: 90,
+  } : null;
+
+  const verifiedSkills: { skill: string; proficiency: number; source: string }[] = profile?.skills?.map((s: any) => ({
+    skill: s.skill?.name || s.skillId,
+    proficiency: s.level === 'EXPERT' ? 95 : s.level === 'ADVANCED' ? 85 : s.level === 'INTERMEDIATE' ? 70 : 50,
+    source: s.source || 'Manual',
+  })) || [];
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading Career Twin...</div>;
+  }
 
   if (!careerTwin) {
-    return <div className="p-8">No career twin data</div>;
+    return <div className="p-8 text-center text-muted-foreground">No career twin data found. Create a profile to start.</div>;
   }
 
   return (
@@ -67,7 +98,7 @@ export default function CareerTwinPage() {
             <div>
               <p className="text-sm text-muted-foreground mb-2">Top Skills</p>
               <div className="flex flex-wrap gap-2">
-                {careerTwin.topSkills.map((skill) => (
+                {careerTwin.topSkills.map((skill: string) => (
                   <span
                     key={skill}
                     className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
@@ -134,11 +165,7 @@ export default function CareerTwinPage() {
         <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">Verified Skills</h3>
           <div className="space-y-4">
-            {[
-              { skill: 'React', proficiency: 85, source: 'GitHub' },
-              { skill: 'TypeScript', proficiency: 80, source: 'GitHub' },
-              { skill: 'Node.js', proficiency: 75, source: 'Resume' },
-            ].map(({ skill, proficiency, source }) => (
+            {verifiedSkills.map(({ skill, proficiency, source }) => (
               <div key={skill}>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm font-medium text-foreground">{skill}</span>

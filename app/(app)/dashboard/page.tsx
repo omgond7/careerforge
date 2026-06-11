@@ -1,10 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCareerStore } from '@/lib/stores/career';
-import { useTrackerStore } from '@/lib/stores/tracker';
-import { useResumeStore } from '@/lib/stores/resume';
-import { useAuthStore } from '@/lib/stores/auth';
+import useSWR from 'swr';
 import { Zap, ArrowRight, Briefcase, Sparkles, Target, BookOpen, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
@@ -16,6 +13,8 @@ import {
 } from '@/components/cards';
 import { AnimatedCounter } from '@/components/animations/counter';
 import { ProgressRing } from '@/components/animations/progress-ring';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -38,15 +37,40 @@ const itemVariants = {
 } as const;
 
 export default function DashboardPage() {
-  const { targetRole, careerTwin } = useCareerStore();
-  const { getApplicationsByStatus } = useTrackerStore();
-  const { atsScore, missingKeywords } = useResumeStore();
-  const { user } = useAuthStore();
+  const { data: user, isLoading: isUserLoading } = useSWR('/api/user/me', fetcher);
+  const { data: applications, isLoading: isAppsLoading } = useSWR('/api/applications', fetcher);
+  const { data: resumes, isLoading: isResumesLoading } = useSWR('/api/resume', fetcher);
+  const { data: jobsResponse, isLoading: isJobsLoading } = useSWR('/api/jobs', fetcher);
 
-  const appliedCount = getApplicationsByStatus('applied').length;
-  const screenCount = getApplicationsByStatus('screen').length;
-  const interviewCount = getApplicationsByStatus('interview').length;
+  const profile = user?.profile;
+  const careerTwin = user ? {
+    id: profile?.id || user.id,
+    name: user.name || 'Candidate',
+    title: profile?.headline || profile?.targetRole || 'Professional Title',
+    company: profile?.experience?.[0]?.company || profile?.targetCompany || 'Self-Employed',
+    profileCompleteness: profile?.profileCompleteness || 0,
+    topSkills: profile?.skills?.slice(0, 5).map((s: any) => s.skill?.name || s.skillId) || [],
+    experience: profile?.experienceYears || 0,
+  } : null;
+
+  const targetRole = profile?.targetRole ? {
+    id: 'target-role-id',
+    title: profile.targetRole,
+    company: profile.targetCompany || 'Dream Company',
+    matchScore: 75,
+    currentMatch: 75,
+    targetMatch: 90,
+    estimatedTime: '6 Months',
+  } : null;
+
+  const appliedCount = applications?.filter((app: any) => app.status?.toLowerCase() === 'applied').length || 0;
+  const screenCount = applications?.filter((app: any) => app.status?.toLowerCase() === 'screen').length || 0;
+  const interviewCount = applications?.filter((app: any) => app.status?.toLowerCase() === 'interview').length || 0;
   const totalApps = appliedCount + screenCount + interviewCount;
+
+  const latestResume = resumes?.[0];
+  const atsScore = latestResume?.atsScore || 70;
+  const missingKeywords = (latestResume?.missingKeywords as string[]) || [];
 
   return (
     <motion.div

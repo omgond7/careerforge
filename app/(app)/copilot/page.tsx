@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send, Brain, MessageCircle, ArrowRight, Sparkles, Briefcase, BookOpen, Target } from 'lucide-react';
+import { Send, Brain, MessageCircle, Sparkles, Briefcase, BookOpen, Target, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -16,37 +16,112 @@ export default function AICopilot() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your Career Copilot. I can help you with job analysis, interview prep, skill development, and career planning. What would you like to explore today?',
+      content: "Hello! I'm your Career Copilot. I can help you with job analysis, interview prep, skill development, and career planning. What would you like to explore today?",
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSendMessage = async () => {
-    if (!input.trim()) return;
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = textToSend?.trim() || input.trim();
+    if (!text) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: text,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'That\'s a great question! Based on your profile, here are some recommendations...',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+    // Optimistically add user message
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+
+    try {
+      const response = await fetch('/api/copilot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        let errMsg = 'Rate limit exceeded or server offline. Please try again.';
+        try {
+          const body = await response.json();
+          if (body.error) errMsg = body.error;
+        } catch (_) {}
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `Error: ${errMsg}`,
+            timestamp: new Date(),
+          },
+        ]);
+        return;
+      }
+
+      // Prepare placeholder assistant message
+      const assistantMessageId = (Date.now() + 2).toString();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+        },
+      ]);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error('No response stream reader');
+
+      let accumulatedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedContent += chunk;
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: accumulatedContent }
+              : msg
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Failed to parse chat stream:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 3).toString(),
+          role: 'assistant',
+          content: 'Oops, something went wrong during transmission. Please try again.',
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const quickPrompts = [
@@ -76,14 +151,14 @@ export default function AICopilot() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
           {messages.length === 1 && (
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-foreground mb-6">How can I help you today?</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-6 font-bold">How can I help you today?</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {quickPrompts.map((prompt) => {
                   const Icon = prompt.icon;
                   return (
                     <button
                       key={prompt.text}
-                      onClick={() => setInput(prompt.prompt)}
+                      onClick={() => handleSendMessage(prompt.prompt)}
                       className="p-4 bg-card border border-border rounded-lg hover:border-primary hover:shadow-md transition-all text-left group"
                     >
                       <div className="flex items-start gap-3">
@@ -110,7 +185,7 @@ export default function AICopilot() {
                 className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {message.role === 'assistant' && (
-                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 animate-fade-in">
                     <Brain className="w-5 h-5 text-primary" />
                   </div>
                 )}
@@ -122,7 +197,7 @@ export default function AICopilot() {
                       : 'bg-card border border-border rounded-bl-none'
                   }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                   <p className={`text-xs mt-1.5 ${
                     message.role === 'user'
                       ? 'text-primary-foreground/70'
@@ -141,9 +216,9 @@ export default function AICopilot() {
             ))}
 
             {isLoading && (
-              <div className="flex gap-3">
+              <div className="flex gap-3 animate-fade-in">
                 <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 </div>
                 <div className="bg-card border border-border rounded-lg rounded-bl-none px-4 py-3">
                   <div className="flex gap-2 items-center">
@@ -169,12 +244,13 @@ export default function AICopilot() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-75 disabled:cursor-not-allowed"
               />
               <Sparkles className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
             </div>
             <Button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={!input.trim() || isLoading}
               className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >

@@ -3,11 +3,48 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, AlertCircle, TrendingUp, Target, Briefcase } from 'lucide-react';
-import { jobAnalysisDetail } from '@/lib/mock-data';
 import { MatchScoreCard } from '@/components/cards';
+import { use } from 'react';
+import useSWR from 'swr';
 
-export default function JobAnalysisDetail({ params }: { params: { id: string } }) {
-  const job = jobAnalysisDetail;
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
+export default function JobAnalysisDetail({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  const { data: job, isLoading } = useSWR(`/api/jobs/${id}`, fetcher);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">
+        Loading job analysis...
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">
+        Job analysis not found.
+      </div>
+    );
+  }
+
+  const requirements = (job.parsedDetails as any)?.requirements || (job.parsedDetails as any)?.preferredSkills || [];
+  const skills = (job.parsedDetails as any)?.requiredSkills || [];
+  const gaps = job.gaps?.map((g: any) => ({
+    skill: g.skillName,
+    required: g.requiredDetail || 'Required',
+    current: g.currentDetail || 'Missing',
+    priority: g.priority || 'medium'
+  })) || [];
+  const similarRoles = (job.parsedDetails as any)?.similarRoles || [];
+  const matchBreakdown = ((job.matchBreakdown as any) || {
+    technicalSkills: 80,
+    experience: 70,
+    softSkills: 75,
+    compensation: 85,
+  }) as Record<string, number>;
 
   return (
     <div className="min-h-screen bg-background">
@@ -23,11 +60,11 @@ export default function JobAnalysisDetail({ params }: { params: { id: string } }
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2">{job.jobTitle}</h1>
-          <p className="text-xl text-muted-foreground mb-4">{job.company} • {job.location}</p>
+          <p className="text-xl text-muted-foreground mb-4">{job.company} • {job.location || 'Unknown'}</p>
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <span>Posted: {new Date(job.postedDate).toLocaleDateString()}</span>
-            <span>Analyzed: {new Date(job.analysisDate).toLocaleDateString()}</span>
-            <span className="text-primary font-medium">{job.salary}</span>
+            <span>Posted: {job.postedDate ? new Date(job.postedDate).toLocaleDateString() : 'N/A'}</span>
+            <span>Analyzed: {job.analysisDate ? new Date(job.analysisDate).toLocaleDateString() : new Date(job.createdAt).toLocaleDateString()}</span>
+            <span className="text-primary font-medium">{job.salary || 'Salary not provided'}</span>
           </div>
         </div>
 
@@ -35,20 +72,22 @@ export default function JobAnalysisDetail({ params }: { params: { id: string } }
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <MatchScoreCard
             title="Match Score"
-            score={job.matchScore}
-            subtitle={job.matchLevel}
+            score={job.matchScore || 0}
+            subtitle={job.matchLevel || 'Analyzing'}
             size="lg"
             className="md:col-span-2"
           />
 
           <div className="bg-card border border-border rounded-lg p-6 flex flex-col justify-center">
             <p className="text-sm text-muted-foreground mb-2">Job Posted</p>
-            <p className="text-2xl font-bold text-foreground">{new Date(job.postedDate).toLocaleDateString()}</p>
+            <p className="text-2xl font-bold text-foreground">
+              {job.postedDate ? new Date(job.postedDate).toLocaleDateString() : 'N/A'}
+            </p>
           </div>
 
           <div className="bg-card border border-border rounded-lg p-6 flex flex-col justify-center">
             <p className="text-sm text-muted-foreground mb-2">Remote</p>
-            <p className="text-2xl font-bold text-foreground">{job.remote ? 'No' : 'Yes'}</p>
+            <p className="text-2xl font-bold text-foreground">{job.remote ? 'Yes' : 'No'}</p>
           </div>
         </div>
 
@@ -56,7 +95,7 @@ export default function JobAnalysisDetail({ params }: { params: { id: string } }
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
           <h3 className="text-lg font-semibold text-foreground mb-6">Match Breakdown</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {Object.entries(job.matchBreakdown).map(([key, value]) => (
+            {Object.entries(matchBreakdown).map(([key, value]) => (
               <div key={key}>
                 <p className="text-sm font-medium text-foreground capitalize mb-2">
                   {key.replace(/([A-Z])/g, ' $1').trim()}
@@ -80,14 +119,18 @@ export default function JobAnalysisDetail({ params }: { params: { id: string } }
               <Target className="w-5 h-5 text-primary" />
               Requirements
             </h3>
-            <ul className="space-y-3">
-              {job.requirements.map((req, idx) => (
-                <li key={idx} className="flex gap-3 items-start">
-                  <span className="inline-block w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                  <span className="text-sm text-muted-foreground">{req}</span>
-                </li>
-              ))}
-            </ul>
+            {requirements.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No specific requirements listed.</p>
+            ) : (
+              <ul className="space-y-3">
+                {requirements.map((req: string, idx: number) => (
+                  <li key={idx} className="flex gap-3 items-start">
+                    <span className="inline-block w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                    <span className="text-sm text-muted-foreground">{req}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="bg-card border border-border rounded-lg p-6">
@@ -95,16 +138,20 @@ export default function JobAnalysisDetail({ params }: { params: { id: string } }
               <Briefcase className="w-5 h-5 text-primary" />
               Required Skills
             </h3>
-            <div className="flex flex-wrap gap-2">
-              {job.skills.map((skill) => (
-                <span
-                  key={skill}
-                  className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm font-medium"
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
+            {skills.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No specific required skills listed.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill: string) => (
+                  <span
+                    key={skill}
+                    className="px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm font-medium"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -114,61 +161,67 @@ export default function JobAnalysisDetail({ params }: { params: { id: string } }
             <AlertCircle className="w-5 h-5 text-primary" />
             Skill Gaps
           </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Skill</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Required</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Your Level</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Priority</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {job.gaps.map((gap) => (
-                  <tr key={gap.skill} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-foreground">{gap.skill}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{gap.required}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{gap.current}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                          gap.priority === 'high'
-                            ? 'bg-destructive/10 text-destructive'
-                            : 'bg-amber-500/10 text-amber-600'
-                        }`}
-                      >
-                        {gap.priority.toUpperCase()}
-                      </span>
-                    </td>
+          {gaps.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No skill gaps identified! You match perfectly.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Skill</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Required</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Your Level</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground">Priority</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {gaps.map((gap: any) => (
+                    <tr key={gap.skill} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">{gap.skill}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{gap.required}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{gap.current}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            gap.priority === 'high'
+                              ? 'bg-destructive/10 text-destructive'
+                              : 'bg-amber-500/10 text-amber-600'
+                          }`}
+                        >
+                          {gap.priority.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Similar Roles */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            Similar Roles
-          </h3>
-          <div className="space-y-3">
-            {job.similarRoles.map((role) => (
-              <div key={role.title} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div>
-                  <p className="font-medium text-foreground">{role.title}</p>
-                  <p className="text-sm text-muted-foreground">{role.company}</p>
+        {similarRoles.length > 0 && (
+          <div className="bg-card border border-border rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Similar Roles
+            </h3>
+            <div className="space-y-3">
+              {similarRoles.map((role: any) => (
+                <div key={role.title} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div>
+                    <p className="font-medium text-foreground">{role.title}</p>
+                    <p className="text-sm text-muted-foreground">{role.company}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary">{role.match}%</p>
+                    <p className="text-xs text-muted-foreground">Match</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-primary">{role.match}%</p>
-                  <p className="text-xs text-muted-foreground">Match</p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4">

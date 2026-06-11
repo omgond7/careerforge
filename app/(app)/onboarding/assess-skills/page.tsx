@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, ArrowRight, BrainCircuit, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BrainCircuit, CheckCircle2, Loader2 } from 'lucide-react';
 
 const quizQuestions = [
   {
@@ -41,6 +41,7 @@ export default function AssessSkillsPage() {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [isFinished, setIsFinished] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const question = quizQuestions[currentQuestionIdx];
 
@@ -56,8 +57,25 @@ export default function AssessSkillsPage() {
     }
   };
 
-  const handleFinish = () => {
-    router.push('/dashboard');
+  const handleFinish = async () => {
+    setIsFinishing(true);
+    try {
+      await fetch('/api/onboarding/step', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          step: 'COMPLETE',
+        }),
+      });
+      router.push('/dashboard');
+    } catch (err) {
+      console.error(err);
+      router.push('/dashboard');
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   return (
@@ -97,7 +115,7 @@ export default function AssessSkillsPage() {
                   <button
                     key={option.key}
                     onClick={() => handleSelectOption(option.key)}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all flex items-start gap-4 ${
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all flex items-start gap-4 cursor-pointer ${
                       isSelected
                         ? 'border-primary bg-primary/5'
                         : 'border-border bg-muted/10 hover:border-primary/45'
@@ -154,7 +172,8 @@ export default function AssessSkillsPage() {
             </div>
             
             <div className="pt-4 flex flex-col sm:flex-row gap-3 max-w-sm mx-auto">
-              <Button onClick={handleFinish} className="w-full">
+              <Button onClick={handleFinish} disabled={isFinishing} className="w-full flex items-center justify-center gap-2">
+                {isFinishing && <Loader2 className="w-4 h-4 animate-spin" />}
                 Go to Dashboard
               </Button>
             </div>

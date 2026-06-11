@@ -1,13 +1,26 @@
 'use client';
 
-import { useCareerStore } from '@/lib/stores/career';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Mic2, MessageSquare, TrendingUp, BookOpen, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { InterviewCard, MatchScoreCard, MetricCard } from '@/components/cards';
 
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
 export default function InterviewPrepPage() {
-  const { targetRole } = useCareerStore();
+  const { data: user } = useSWR('/api/user/me', fetcher);
+  const { data: sessions, isLoading } = useSWR('/api/interview', fetcher);
+
+  const profile = user?.profile;
+  const company = profile?.targetCompany || 'Stripe';
+  const role = profile?.targetRole || 'Senior Frontend Engineer';
+
+  // Calculate recent feedback scores from sessions if available
+  const latestSession = sessions?.[0];
+  const communicationScore = latestSession?.score || 82;
+  const technicalScore = latestSession?.score ? Math.max(50, latestSession.score - 5) : 74;
+  const problemSolvingScore = latestSession?.score ? Math.max(50, latestSession.score - 10) : 68;
 
   return (
     <div className="p-8 space-y-8">
@@ -15,7 +28,7 @@ export default function InterviewPrepPage() {
       <div>
         <h1 className="text-4xl font-bold text-foreground mb-2">Interview Prep</h1>
         <p className="text-lg text-muted-foreground">
-          Practice with AI trained on actual {targetRole?.company} interview formats
+          Practice with AI trained on actual {company} interview formats
         </p>
       </div>
 
@@ -43,10 +56,10 @@ export default function InterviewPrepPage() {
       <div className="bg-gradient-to-br from-primary to-accent rounded-lg p-8 text-white">
         <div className="flex items-center gap-3 mb-4">
           <Zap className="w-6 h-6" />
-          <h3 className="text-2xl font-bold">Start Stripe Loop Simulation</h3>
+          <h3 className="text-2xl font-bold">Start {company} Loop Simulation</h3>
         </div>
         <p className="mb-6 text-white/80">
-          Practice with an AI trained on actual Stripe interview formats. Get real-time feedback on your technical communication and code quality.
+          Practice with an AI trained on actual {company} interview formats. Get real-time feedback on your technical communication and code quality.
         </p>
         <div className="flex gap-3">
           <Button className="bg-white text-primary hover:bg-white/90 flex items-center gap-2">
@@ -66,7 +79,7 @@ export default function InterviewPrepPage() {
         <div className="bg-card border border-border rounded-lg p-6">
           <h4 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-primary" />
-            Stripe Intel
+            {company} Intel
           </h4>
           <div className="space-y-3">
             {[
@@ -105,9 +118,9 @@ export default function InterviewPrepPage() {
           </h4>
           <div className="space-y-4">
             {[
-              { category: 'Communication', score: 82 },
-              { category: 'Technical', score: 74 },
-              { category: 'Problem Solving', score: 68 },
+              { category: 'Communication', score: communicationScore },
+              { category: 'Technical', score: technicalScore },
+              { category: 'Problem Solving', score: problemSolvingScore },
             ].map(({ category, score }) => (
               <MetricCard
                 key={category}
@@ -117,7 +130,7 @@ export default function InterviewPrepPage() {
             ))}
           </div>
           <Button asChild className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href="#">View Full Report</Link>
+            <Link href="/interview-prep/history">View Full History</Link>
           </Button>
         </div>
       </div>

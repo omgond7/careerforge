@@ -5,15 +5,36 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { JobCard } from '@/components/cards';
 import { ArrowLeft, Bookmark, Search } from 'lucide-react';
-import { jobAnalysisHistory } from '@/lib/mock-data';
+import useSWR from 'swr';
+import { useRouter } from 'next/navigation';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
+const parseSalaryRange = (salaryStr: string | null | undefined) => {
+  if (!salaryStr) return undefined;
+  try {
+    const parts = salaryStr.split('-');
+    if (parts.length === 2) {
+      const minVal = parseInt(parts[0].replace(/[^0-9]/g, ''));
+      const maxVal = parseInt(parts[1].replace(/[^0-9]/g, ''));
+      if (!isNaN(minVal) && !isNaN(maxVal)) {
+        return { min: minVal, max: maxVal };
+      }
+    }
+  } catch {}
+  return undefined;
+};
 
 export default function SavedJobsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+
+  const { data: jobsResponse, isLoading } = useSWR('/api/jobs?saved=true', fetcher);
+  const jobs = jobsResponse?.jobs || [];
   
-  // Filter jobs to simulate "saved" jobs (e.g. Stripe and Vercel)
-  const savedJobs = jobAnalysisHistory.filter(job => 
-    job.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.company.toLowerCase().includes(searchTerm.toLowerCase())
+  const savedJobs = jobs.filter((job: any) => 
+    job.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    job.company?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -52,23 +73,22 @@ export default function SavedJobsPage() {
       </div>
 
       {/* Job Cards Grid */}
-      {savedJobs.length > 0 ? (
+      {isLoading ? (
+        <div className="text-center py-12 text-muted-foreground">Loading saved jobs...</div>
+      ) : savedJobs.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {savedJobs.map((job) => (
+          {savedJobs.map((job: any) => (
             <JobCard
               key={job.id}
               title={job.jobTitle}
               company={job.company}
-              location={job.location}
-              salaryRange={{
-                min: parseInt(job.salary.split('-')[0].replace(/[^0-9]/g, '')),
-                max: parseInt(job.salary.split('-')[1].replace(/[^0-9]/g, '')),
-              }}
-              matchScore={job.matchScore}
-              matchLevel="Highly Aligned"
-              skills={job.keyGaps}
-              onAnalyze={() => alert('Launching deep AI gap evaluation...')}
-              onViewDetails={() => alert(`Redirecting to details for analysis #${job.id}`)}
+              location={job.location || 'Unknown'}
+              salaryRange={parseSalaryRange(job.salary)}
+              matchScore={job.matchScore || 0}
+              matchLevel={job.matchLevel || undefined}
+              skills={job.gaps?.slice(0, 3).map((g: any) => g.skillName) || []}
+              onAnalyze={() => router.push(`/job-intelligence/${job.id}`)}
+              onViewDetails={() => router.push(`/job-intelligence/${job.id}`)}
             />
           ))}
         </div>

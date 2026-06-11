@@ -1,11 +1,32 @@
 'use client';
 
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, Lock, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Circle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
 export default function RoadmapPage() {
-  const roadmap = [
+  const { data: roadmaps, isLoading } = useSWR('/api/roadmap', fetcher);
+  const activeRoadmap = roadmaps?.find((r: any) => r.isActive) ?? roadmaps?.[0];
+  const dbSteps = activeRoadmap?.steps || [];
+
+  const roadmap: {
+    week: string;
+    status: string;
+    title: string;
+    description: string;
+    resources: string[];
+    hours: number;
+  }[] = dbSteps.length > 0 ? dbSteps.map((step: any) => ({
+    week: `Step ${step.stepNumber}`,
+    status: step.status === 'in_progress' ? 'in-progress' : step.status === 'completed' ? 'completed' : 'not-started',
+    title: step.title,
+    description: step.description || 'Learning milestone details.',
+    resources: Array.isArray(step.resources) ? step.resources.map((r: any) => r.title) : ['Milestone documentation'],
+    hours: 10,
+  })) : [
     {
       week: 'Week 1',
       status: 'in-progress',
@@ -52,6 +73,11 @@ export default function RoadmapPage() {
     },
   ];
 
+  const completedSteps = dbSteps.filter((s: any) => s.status === 'completed').length;
+  const totalSteps = dbSteps.length || 6;
+  const progressPercent = Math.round((completedSteps / totalSteps) * 100) || 17;
+  const currentStepText = dbSteps.length > 0 ? `Step ${completedSteps + 1} of ${totalSteps}` : 'Week 1 of 6';
+
   return (
     <div className="p-8 space-y-8">
       {/* Header */}
@@ -67,16 +93,16 @@ export default function RoadmapPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div>
             <p className="text-sm text-muted-foreground mb-2">Overall Progress</p>
-            <p className="text-4xl font-bold text-foreground">Week 1 of 6</p>
+            <p className="text-4xl font-bold text-foreground">{currentStepText}</p>
           </div>
           <div className="flex-1 max-w-md">
             <div className="h-3 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
-                style={{ width: '17%' }}
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">17% complete</p>
+            <p className="text-xs text-muted-foreground mt-2">{progressPercent}% complete</p>
           </div>
         </div>
       </div>

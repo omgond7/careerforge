@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { use } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -13,15 +13,69 @@ import {
   ChevronRight, 
   TrendingUp, 
   Award, 
-  CheckCircle 
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
-import { skillDetailData } from '@/lib/mock-data';
 import { MetricCard } from '@/components/cards';
 
-export default function TechnologyDetailPage() {
-  const params = useParams();
-  const id = params.id as string;
-  const tech = skillDetailData; // Load GraphQL mock skill detail data
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
+export default function TechnologyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+  
+  const { data: userSkills, isLoading } = useSWR('/api/user/skills', fetcher);
+
+  const userSkill = userSkills?.find((us: any) => 
+    us.id === id || 
+    us.skillId === id || 
+    us.skill?.name?.toLowerCase() === id?.toLowerCase()
+  );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  const tech = userSkill ? {
+    name: userSkill.skill.name,
+    category: userSkill.skill.category || 'Core Skill',
+    proficiency: userSkill.level === 'BEGINNER' ? 'Beginner' : userSkill.level === 'INTERMEDIATE' ? 'Intermediate' : userSkill.level === 'ADVANCED' ? 'Advanced' : 'Expert',
+    endorsements: 12,
+    yearsOfExperience: userSkill.yearsUsed || 1.5,
+    courses: [
+      { name: `Advanced ${userSkill.skill.name} Course`, platform: 'Frontend Masters', status: 'In Progress' },
+      { name: `${userSkill.skill.name} The Complete Guide`, platform: 'Udemy', status: 'Completed' },
+    ],
+    jobMatches: 24,
+    relevantJobs: [
+      { title: 'Senior Engineer', company: 'Stripe', match: 92 },
+      { title: 'Lead Stack Developer', company: 'GitHub', match: 88 },
+    ],
+    relatedSkills: [
+      { name: 'REST APIs', proficiency: 'Advanced', relevance: 'high' },
+      { name: 'System Design', proficiency: 'Intermediate', relevance: 'medium' },
+    ],
+  } : {
+    name: id ? id.charAt(0).toUpperCase() + id.slice(1) : 'Technology',
+    category: 'Development',
+    proficiency: 'Intermediate',
+    endorsements: 6,
+    yearsOfExperience: 2.0,
+    courses: [
+      { name: `Mastering ${id}`, platform: 'Udemy', status: 'Completed' },
+    ],
+    jobMatches: 10,
+    relevantJobs: [
+      { title: 'Software Developer', company: 'Partner Corp', match: 85 },
+    ],
+    relatedSkills: [
+      { name: 'Software Architecture', proficiency: 'Advanced', relevance: 'high' },
+    ],
+  };
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8">
@@ -124,7 +178,7 @@ export default function TechnologyDetailPage() {
                       {job.match}% Match
                     </Badge>
                     <Button asChild size="sm" variant="outline" className="border-border">
-                      <Link href="/job-intelligence/1">
+                      <Link href="/job-intelligence">
                         View Details
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </Link>
@@ -163,10 +217,10 @@ export default function TechnologyDetailPage() {
             </div>
             <h3 className="font-bold text-foreground">Gap Target Identified</h3>
             <p className="text-xs text-muted-foreground">
-              This skill was identified as a critical gap in 3 target job applications. Let's add GraphQL learning milestones to your career twin roadmap.
+              This skill was identified as a key gap in job descriptions. Let's add learning milestones to your career twin roadmap.
             </p>
             <Button asChild className="w-full">
-              <Link href="/career-twin/roadmap/graphql-mastery">Open Roadmap</Link>
+              <Link href="/roadmap">Open Roadmap</Link>
             </Button>
           </div>
         </div>

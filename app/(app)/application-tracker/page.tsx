@@ -1,20 +1,40 @@
 'use client';
 
-import { useTrackerStore } from '@/lib/stores/tracker';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import { ApplicationCard, MetricCard } from '@/components/cards';
+import useSWR from 'swr';
+import { useRouter } from 'next/navigation';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
 
 export default function ApplicationTrackerPage() {
-  const { applications, getApplicationsByStatus } = useTrackerStore();
+  const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const { data: applications = [], isLoading } = useSWR('/api/applications', fetcher);
 
   const statuses = ['applied', 'screen', 'interview', 'offer'] as const;
   const statusLabels = {
     applied: 'Applied',
-    screen: 'Screen',
+    screen: 'Screening',
     interview: 'Interview',
     offer: 'Offer',
+  };
+
+  const getApplicationsByStatus = (status: string) => {
+    return (applications || []).filter((app: any) => {
+      const statusMatch = app.status?.toLowerCase() === status.toLowerCase() || 
+        (status === 'screen' && app.status?.toLowerCase() === 'screening');
+      if (!statusMatch) return false;
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        return app.company?.toLowerCase().includes(q) || app.jobTitle?.toLowerCase().includes(q);
+      }
+      return true;
+    });
   };
 
   return (
@@ -60,45 +80,55 @@ export default function ApplicationTrackerPage() {
           <Search className="absolute left-4 top-3.5 w-5 h-5 text-muted-foreground" />
           <input
             type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search applications..."
             className="w-full pl-12 pr-4 py-2.5 border border-border rounded-lg bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
 
         {/* Columns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statuses.map((status) => (
-            <div key={status} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-foreground text-lg">
-                  {statusLabels[status]}
-                </h3>
-                <span className="text-sm font-bold text-primary">
-                  {getApplicationsByStatus(status).length}
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {getApplicationsByStatus(status).map((app) => (
-                  <ApplicationCard
-                    key={app.id}
-                    company={app.company}
-                    position={app.jobTitle}
-                    status={status as 'applied' | 'screening' | 'interview' | 'offer' | 'rejected'}
-                    appliedDate={new Date(app.appliedDate).toLocaleDateString()}
-                    matchScore={app.matchScore}
-                  />
-                ))}
-
-                {getApplicationsByStatus(status).length === 0 && (
-                  <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                    <p className="text-sm text-muted-foreground">No applications yet</p>
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading pipeline...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {statuses.map((status) => {
+              const list = getApplicationsByStatus(status);
+              return (
+                <div key={status} className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-foreground text-lg">
+                      {statusLabels[status]}
+                    </h3>
+                    <span className="text-sm font-bold text-primary">
+                      {list.length}
+                    </span>
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+
+                  <div className="space-y-3">
+                    {list.map((app: any) => (
+                      <ApplicationCard
+                        key={app.id}
+                        company={app.company}
+                        position={app.jobTitle}
+                        status={status === 'screen' ? 'screening' : (status as any)}
+                        appliedDate={new Date(app.appliedDate).toLocaleDateString()}
+                        matchScore={app.matchScore}
+                        onViewDetails={() => router.push(`/application-tracker/${app.id}`)}
+                      />
+                    ))}
+
+                    {list.length === 0 && (
+                      <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                        <p className="text-sm text-muted-foreground">No applications yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Analytics Section */}

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ApplicationStatus = 'applied' | 'screen' | 'interview' | 'offer' | 'rejected';
+export type ApplicationStatus = 'applied' | 'screen' | 'interview' | 'offer' | 'rejected' | 'wishlist';
 
 export interface Application {
   id: string;
@@ -14,48 +14,79 @@ export interface Application {
 
 interface TrackerState {
   applications: Application[];
-  addApplication: (app: Omit<Application, 'id'>) => void;
-  updateApplication: (id: string, updates: Partial<Application>) => void;
-  removeApplication: (id: string) => void;
+  isLoading: boolean;
+  fetchApplications: () => Promise<void>;
+  addApplication: (app: Omit<Application, 'id'>) => Promise<void>;
+  updateApplication: (id: string, updates: Partial<Application>) => Promise<void>;
+  removeApplication: (id: string) => Promise<void>;
   getApplicationsByStatus: (status: ApplicationStatus) => Application[];
 }
 
 export const useTrackerStore = create<TrackerState>((set, get) => ({
-  applications: [
-    {
-      id: '1',
-      jobTitle: 'UI Engineer',
-      company: 'Meta',
-      status: 'screen',
-      appliedDate: '2024-10-15',
-      matchScore: 82,
-    },
-  ],
-  
-  addApplication: (app: Omit<Application, 'id'>) => {
-    set((state) => ({
-      applications: [
-        ...state.applications,
-        { ...app, id: Date.now().toString() },
-      ],
-    }));
+  applications: [],
+  isLoading: false,
+
+  fetchApplications: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await fetch('/api/applications');
+      if (res.ok) {
+        const { data } = await res.json();
+        // Normalize status to lowercase
+        const normalized = data.map((a: any) => ({ ...a, status: a.status.toLowerCase() }));
+        set({ applications: normalized, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
+    } catch {
+      set({ isLoading: false });
+    }
   },
-  
-  updateApplication: (id: string, updates: Partial<Application>) => {
-    set((state) => ({
-      applications: state.applications.map((app) =>
-        app.id === id ? { ...app, ...updates } : app
-      ),
-    }));
+
+  addApplication: async (app) => {
+    try {
+      const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...app, status: app.status.toUpperCase() }),
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        set((state) => ({ 
+          applications: [...state.applications, { ...data, status: data.status.toLowerCase() }] 
+        }));
+      }
+    } catch {}
   },
-  
-  removeApplication: (id: string) => {
-    set((state) => ({
-      applications: state.applications.filter((app) => app.id !== id),
-    }));
+
+  updateApplication: async (id, updates) => {
+    try {
+      const res = await fetch(`/api/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updates, ...(updates.status && { status: updates.status.toUpperCase() }) }),
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        set((state) => ({
+          applications: state.applications.map((a) => 
+            a.id === id ? { ...a, ...data, status: data.status.toLowerCase() } : a
+          ),
+        }));
+      }
+    } catch {}
   },
-  
-  getApplicationsByStatus: (status: ApplicationStatus) => {
-    return get().applications.filter((app) => app.status === status);
+
+  removeApplication: async (id) => {
+    try {
+      const res = await fetch(`/api/applications/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        set((state) => ({ 
+          applications: state.applications.filter((a) => a.id !== id) 
+        }));
+      }
+    } catch {}
   },
+
+  getApplicationsByStatus: (status) => get().applications.filter((a) => a.status === status),
 }));

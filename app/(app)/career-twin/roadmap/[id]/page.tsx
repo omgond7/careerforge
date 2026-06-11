@@ -2,21 +2,88 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Clock, BookOpen, Code, Target, TrendingUp } from 'lucide-react';
-import { roadmapMilestoneDetail } from '@/lib/mock-data';
-import { MetricCard, RoadmapCard } from '@/components/cards';
+import { ArrowLeft, CheckCircle2, Clock, BookOpen, Code, Target, Loader2 } from 'lucide-react';
+import { MetricCard } from '@/components/cards';
 
-export default function RoadmapMilestoneDetail() {
-  const milestone = roadmapMilestoneDetail;
+import { use } from 'react';
+import useSWR from 'swr';
+
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
+
+export default function RoadmapMilestoneDetail({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+
+  const { data: roadmaps, isLoading } = useSWR('/api/roadmap', fetcher);
+
+  // Find the step in any of the user's roadmaps that matches id
+  let step: any = null;
+  let currentRm: any = null;
+  if (roadmaps) {
+    for (const rm of roadmaps) {
+      step = rm.steps?.find((s: any) => s.id === id || String(s.stepNumber) === id);
+      if (step) {
+        currentRm = rm;
+        break;
+      }
+    }
+  }
+
+  const milestone = step ? {
+    title: step.title,
+    week: step.stepNumber,
+    description: step.description || 'Learn and master this skill milestone.',
+    startDate: currentRm?.createdAt || new Date(),
+    estimatedEndDate: step.targetDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    actualHours: step.status === 'completed' ? 10 : 4.5,
+    estimatedHours: 10,
+    learningObjectives: [
+      `Understand core principles of ${step.title}`,
+      `Practice hands-on implementation and build project models`,
+    ],
+    resources: Array.isArray(step.resources) ? step.resources : [
+      { type: 'course', title: 'Fundamentals & Setup', platform: 'Official Documentation', duration: '3 hours', link: '#' },
+    ],
+    completedTasks: step.status === 'completed' ? [{ title: 'Watch fundamentals videos', completed: true, date: step.completedAt || new Date() }] : [],
+    remainingTasks: step.status !== 'completed' ? [{ title: 'Complete exercise projects', completed: false }] : [],
+  } : {
+    title: 'Roadmap Milestone',
+    week: 1,
+    description: 'Learn and master this skill milestone.',
+    startDate: new Date(),
+    estimatedEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    actualHours: 4.5,
+    estimatedHours: 10,
+    learningObjectives: [
+      `Understand core principles of the target skill`,
+      `Practice hands-on implementation and build project models`,
+    ],
+    resources: [
+      { type: 'course', title: 'Fundamentals & Setup', platform: 'Official Documentation', duration: '3 hours', link: '#' },
+    ],
+    completedTasks: [],
+    remainingTasks: [
+      { title: 'Complete introductory courses', completed: false }
+    ],
+  };
+
   const progressPercentage = Math.round(
-    (milestone.completedTasks.length / (milestone.completedTasks.length + milestone.remainingTasks.length)) * 100
+    (milestone.completedTasks.length / (milestone.completedTasks.length + milestone.remainingTasks.length || 1)) * 100
   );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Button asChild variant="ghost" size="sm" className="mb-6">
-          <Link href="/career-twin/roadmap">
+          <Link href="/roadmap">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Roadmap
           </Link>
@@ -101,7 +168,7 @@ export default function RoadmapMilestoneDetail() {
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
           <h3 className="text-lg font-semibold text-foreground mb-6">Resources</h3>
           <div className="space-y-4">
-            {milestone.resources.map((resource, idx) => (
+            {milestone.resources.map((resource: any, idx: number) => (
               <div key={idx} className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
                 <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
                   {resource.type === 'course' ? (
@@ -135,7 +202,7 @@ export default function RoadmapMilestoneDetail() {
               Completed ({milestone.completedTasks.length})
             </h3>
             <ul className="space-y-2">
-              {milestone.completedTasks.map((task, idx) => (
+              {milestone.completedTasks.map((task: any, idx: number) => (
                 <li key={idx} className="flex gap-2 items-start text-sm">
                   <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                   <div>
@@ -150,7 +217,7 @@ export default function RoadmapMilestoneDetail() {
           <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">Remaining ({milestone.remainingTasks.length})</h3>
             <ul className="space-y-2">
-              {milestone.remainingTasks.map((task, idx) => (
+              {milestone.remainingTasks.map((task: any, idx: number) => (
                 <li key={idx} className="flex gap-2 items-start text-sm">
                   <span className="w-4 h-4 rounded-full border-2 border-amber-600 mt-0.5 flex-shrink-0" />
                   <p className="text-foreground">{task.title}</p>

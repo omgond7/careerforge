@@ -1,21 +1,83 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Save, X } from 'lucide-react';
-import { userProfileData } from '@/lib/mock-data';
+import { ArrowLeft, Save, X, Loader2 } from 'lucide-react';
 import { MetricCard } from '@/components/cards';
 
-export default function ProfileSettings() {
-  const [profile, setProfile] = useState(userProfileData);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState(userProfileData);
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
 
-  const handleSave = () => {
-    setProfile(formData);
-    setIsEditing(false);
+export default function ProfileSettings() {
+  const { data: profile, error, isLoading, mutate } = useSWR('/api/settings/profile', fetcher);
+
+  // Stats from other endpoints
+  const { data: apps } = useSWR('/api/applications', fetcher);
+  const { data: jobs } = useSWR('/api/jobs', fetcher);
+  const { data: interviews } = useSWR('/api/interview', fetcher);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    headline: '',
+    location: '',
+    bio: '',
+  });
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        name: profile.name || '',
+        headline: profile.headline || '',
+        location: profile.location || '',
+        bio: profile.bio || '',
+      });
+    }
+  }, [profile]);
+
+  const handleSave = async () => {
+    const res = await fetch('/api/settings/profile', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(formData),
+    });
+
+    if (res.ok) {
+      mutate();
+      setIsEditing(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive mb-4">Failed to load profile settings.</p>
+          <Button asChild variant="outline">
+            <Link href="/dashboard">Back to Dashboard</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const jobsAnalyzed = jobs?.length || 0;
+  const applicationsSubmitted = apps?.length || 0;
+  const interviewsPrepared = interviews?.length || 0;
+  const skillsGained = profile.skillsCount || 6; // fallback/calculated
+
+  const userAvatar = profile.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(profile.name || 'User')}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,7 +93,7 @@ export default function ProfileSettings() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Profile Settings</h1>
-          <p className="text-muted-foreground">Update your personal information and preferences</p>
+          <p className="text-muted-foreground">Update your personal information and career profile</p>
         </div>
 
         {/* Profile Picture & Basic Info */}
@@ -40,16 +102,10 @@ export default function ProfileSettings() {
             {/* Avatar */}
             <div className="flex flex-col items-center gap-4">
               <img
-                src={profile.profileImage}
-                alt={profile.name}
-                className="w-24 h-24 rounded-full border-4 border-border"
+                src={userAvatar}
+                alt={profile.name || 'User'}
+                className="w-24 h-24 rounded-full border-4 border-border object-cover"
               />
-              {isEditing && (
-                <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2 text-sm font-medium">
-                  <Upload className="w-4 h-4" />
-                  Change Picture
-                </button>
-              )}
             </div>
 
             {/* Profile Info */}
@@ -58,15 +114,15 @@ export default function ProfileSettings() {
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Name</p>
-                    <p className="text-lg font-semibold text-foreground">{profile.name}</p>
+                    <p className="text-lg font-semibold text-foreground">{profile.name || 'Not provided'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Email</p>
                     <p className="text-lg font-semibold text-foreground">{profile.email}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Title</p>
-                    <p className="text-lg font-semibold text-foreground">{profile.title}</p>
+                    <p className="text-sm text-muted-foreground mb-1">Title / Headline</p>
+                    <p className="text-lg font-semibold text-foreground">{profile.headline || 'Not provided'}</p>
                   </div>
                 </div>
               ) : (
@@ -81,20 +137,20 @@ export default function ProfileSettings() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Email (Read-only)</label>
                     <input
                       type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-4 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={profile.email}
+                      disabled
+                      className="w-full px-4 py-2 bg-muted border border-border rounded-lg text-muted-foreground cursor-not-allowed"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">Title</label>
+                    <label className="block text-sm font-medium text-foreground mb-1">Title / Headline</label>
                     <input
                       type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      value={formData.headline}
+                      onChange={(e) => setFormData({ ...formData, headline: e.target.value })}
                       className="w-full px-4 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -109,7 +165,6 @@ export default function ProfileSettings() {
                   onClick={() => setIsEditing(true)}
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
                 >
-                  <Save className="w-4 h-4 mr-2" />
                   Edit Profile
                 </Button>
               ) : (
@@ -124,7 +179,12 @@ export default function ProfileSettings() {
                   <Button
                     onClick={() => {
                       setIsEditing(false);
-                      setFormData(profile);
+                      setFormData({
+                        name: profile.name || '',
+                        headline: profile.headline || '',
+                        location: profile.location || '',
+                        bio: profile.bio || '',
+                      });
                     }}
                     variant="outline"
                     className="border-border"
@@ -144,21 +204,39 @@ export default function ProfileSettings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Location</label>
-              <p className="px-4 py-2 bg-input border border-border rounded-lg text-foreground">
-                {profile.location}
-              </p>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full px-4 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              ) : (
+                <p className="px-4 py-2 bg-input border border-border rounded-lg text-foreground min-h-[42px]">
+                  {profile.location || 'Not specified'}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Timezone</label>
-              <p className="px-4 py-2 bg-input border border-border rounded-lg text-foreground">
-                {profile.timezone}
+              <p className="px-4 py-2 bg-muted border border-border rounded-lg text-muted-foreground min-h-[42px]">
+                UTC (Auto-detected)
               </p>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-foreground mb-2">Bio</label>
-              <p className="px-4 py-2 bg-input border border-border rounded-lg text-foreground">
-                {profile.bio}
-              </p>
+              {isEditing ? (
+                <textarea
+                  value={formData.bio}
+                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                  rows={4}
+                  className="w-full px-4 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              ) : (
+                <p className="px-4 py-2 bg-input border border-border rounded-lg text-foreground min-h-[42px] whitespace-pre-wrap">
+                  {profile.bio || 'Not specified'}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -167,23 +245,23 @@ export default function ProfileSettings() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <MetricCard
             title="Jobs Analyzed"
-            value={profile.stats.jobsAnalyzed}
+            value={jobsAnalyzed}
             subtitle="Total career moves"
           />
           <MetricCard
             title="Applications"
-            value={profile.stats.applicationsSubmitted}
+            value={applicationsSubmitted}
             subtitle="Total submitted"
           />
           <MetricCard
             title="Interview Prep"
-            value={profile.stats.interviewsPrepared}
+            value={interviewsPrepared}
             subtitle="Practice sessions"
           />
           <MetricCard
             title="Skills Gained"
-            value={profile.stats.skillsGained}
-            subtitle="This year"
+            value={skillsGained}
+            subtitle="Identified skills"
           />
         </div>
 
@@ -194,16 +272,12 @@ export default function ProfileSettings() {
             <div className="flex items-center justify-between py-3 border-b border-border">
               <span className="text-sm text-muted-foreground">Account Created</span>
               <span className="text-sm font-medium text-foreground">
-                {new Date(profile.joinDate).toLocaleDateString()}
+                {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'Recent'}
               </span>
             </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-sm text-muted-foreground">Member Since</span>
-              <span className="text-sm font-medium text-foreground">3 months</span>
-            </div>
             <div className="flex items-center justify-between py-3">
-              <span className="text-sm text-muted-foreground">Last Login</span>
-              <span className="text-sm font-medium text-foreground">Today at 10:30 AM</span>
+              <span className="text-sm text-muted-foreground">Member Status</span>
+              <span className="text-sm font-medium text-foreground">Active</span>
             </div>
           </div>
         </div>

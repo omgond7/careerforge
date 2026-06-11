@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Briefcase, Code2, Zap } from 'lucide-react';
+import { ArrowRight, Briefcase, Code2, Zap, Loader2 } from 'lucide-react';
 
 const roles = [
   {
@@ -49,9 +49,29 @@ export default function SelectRolePage() {
     if (!selectedRole) return;
     
     setIsLoading(true);
-    setTimeout(() => {
-      router.push('/onboarding/assess-skills');
-    }, 1000);
+    try {
+      const selectedObj = roles.find(r => r.id === selectedRole);
+      const targetRoleTitle = selectedObj ? selectedObj.title : 'Senior Frontend Engineer';
+      
+      const res = await fetch('/api/onboarding/select-role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          targetRole: targetRoleTitle,
+          experienceLevel: 5,
+        }),
+      });
+
+      if (res.ok) {
+        router.push('/onboarding/import-wizard');
+      }
+    } catch (err) {
+      console.error('Failed to select target onboarding role:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -76,7 +96,7 @@ export default function SelectRolePage() {
             <button
               key={role.id}
               onClick={() => setSelectedRole(role.id)}
-              className={`text-left p-6 rounded-lg border-2 transition-all ${
+              className={`text-left p-6 rounded-lg border-2 transition-all cursor-pointer ${
                 isSelected
                   ? 'border-primary bg-primary/5'
                   : 'border-border bg-card hover:border-primary/50'
@@ -126,6 +146,9 @@ export default function SelectRolePage() {
           onClick={handleContinue}
           className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
         >
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+          ) : null}
           Continue
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCareerStore } from '@/lib/stores/career';
+import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
@@ -11,12 +11,58 @@ import {
 } from '@/components/cards';
 import { GapTable } from '@/components/table';
 
-export default function GapAnalysisPage() {
-  const { targetRole } = useCareerStore();
+const fetcher = (url: string) => fetch(url).then(r => r.json()).then(r => r.data);
 
-  if (!targetRole) {
-    return <div className="p-8">No target role data</div>;
-  }
+export default function GapAnalysisPage() {
+  const { data: user, isLoading: isUserLoading } = useSWR('/api/user/me', fetcher);
+  const { data: gapData, isLoading: isGapLoading } = useSWR('/api/gap-analysis', fetcher);
+
+  const profile = user?.profile;
+  const targetRole = {
+    title: profile?.targetRole || 'Senior Frontend Engineer',
+    company: profile?.targetCompany || 'Stripe',
+    currentMatch: 75,
+    targetMatch: 90,
+    gapAnalysis: {
+      skillGaps: gapData?.topGaps?.length > 0 ? gapData.topGaps.map((g: any) => g.skill) : ['GraphQL', 'AWS', 'System Design'],
+      experienceGap: 6,
+      requiredProjects: ['GraphQL Dashboard', 'Real-time Chat App'],
+    }
+  };
+
+  const defaultRows = [
+    {
+      type: 'Skill',
+      requirement: 'GraphQL (Advanced)',
+      yourStatus: 'Beginner (1 project)',
+      severity: 'high',
+      actionPlan: 'In Progress',
+    },
+    {
+      type: 'Experience',
+      requirement: 'Backend Context',
+      yourStatus: 'Frontend Only',
+      severity: 'medium',
+      actionPlan: 'Not Started',
+    },
+    {
+      type: 'Skill',
+      requirement: 'AWS / Deployment',
+      yourStatus: 'Vercel/Netlify mostly',
+      severity: 'high',
+      actionPlan: 'Planned',
+    },
+  ];
+
+  const rows = gapData?.topGaps?.length > 0
+    ? gapData.topGaps.map((g: any, index: number) => ({
+        type: 'Skill',
+        requirement: `${g.skill} (Required)`,
+        yourStatus: gapData.profileSkills?.includes(g.skill) ? 'Intermediate' : 'Missing',
+        severity: index < 2 ? 'high' : 'medium',
+        actionPlan: gapData.profileSkills?.includes(g.skill) ? 'Completed' : 'Planned',
+      }))
+    : defaultRows;
 
   return (
     <div className="p-8 space-y-8">
@@ -63,7 +109,7 @@ export default function GapAnalysisPage() {
             <h3 className="text-lg font-semibold text-foreground">Critical Skill Gaps</h3>
           </div>
           <div className="space-y-3">
-            {targetRole.gapAnalysis?.skillGaps.map((skill) => (
+            {targetRole.gapAnalysis?.skillGaps.map((skill: string) => (
               <div
                 key={skill}
                 className="flex items-center justify-between p-3 rounded-lg bg-destructive/5 border border-destructive/20"
@@ -105,7 +151,7 @@ export default function GapAnalysisPage() {
             <h3 className="text-lg font-semibold text-foreground">Required Projects</h3>
           </div>
           <div className="space-y-3">
-            {targetRole.gapAnalysis?.requiredProjects.map((project) => (
+            {targetRole.gapAnalysis?.requiredProjects.map((project: string) => (
               <div
                 key={project}
                 className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20"
@@ -121,29 +167,7 @@ export default function GapAnalysisPage() {
       {/* Detailed Breakdown Table */}
       <GapTable
         title="Detailed Breakdown"
-        rows={[
-          {
-            type: 'Skill',
-            requirement: 'GraphQL (Advanced)',
-            yourStatus: 'Beginner (1 project)',
-            severity: 'high',
-            actionPlan: 'In Progress',
-          },
-          {
-            type: 'Experience',
-            requirement: 'Backend Context',
-            yourStatus: 'Frontend Only',
-            severity: 'medium',
-            actionPlan: 'Not Started',
-          },
-          {
-            type: 'Skill',
-            requirement: 'AWS / Deployment',
-            yourStatus: 'Vercel/Netlify mostly',
-            severity: 'high',
-            actionPlan: 'Planned',
-          },
-        ]}
+        rows={rows}
       />
 
       {/* Remediation Timeline */}
