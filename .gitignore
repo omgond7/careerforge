@@ -21,3 +21,8 @@ coverage/
 playwright-report/
 test-results/
 playwright/.cache/
+
+# Personal development markdown docs
+*.md
+!README.md
+
